@@ -9,6 +9,76 @@ chrome.action.onClicked.addListener((tab) => {
   });
 });
 
+// Update check. Chrome won't let an unpacked extension replace itself, so
+// this only tells you a newer version is on the download page: a "NEW"
+// badge on the icon, plus a right-click menu item that opens the page.
+const SITE = "https://raysantos.github.io/netflix-overlay/";
+const CURRENT = chrome.runtime.getManifest().version;
+
+const isNewer = (a, b) => {
+  const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  }
+  return false;
+};
+
+async function showUpdateState() {
+  const { latest } = await chrome.storage.local.get("latest");
+  const available = latest && isNewer(latest, CURRENT);
+  await chrome.action.setBadgeText({ text: available ? "NEW" : "" });
+  await chrome.action.setBadgeBackgroundColor({ color: "#e8553a" });
+  await chrome.action.setTitle({
+    title: available
+      ? `Float video (Alt+P) · v${latest} available, right-click to download`
+      : "Float video (Alt+P)",
+  });
+  await chrome.contextMenus.update("get-update", {
+    visible: !!available,
+    title: available ? `Download update (v${latest})` : "Download update",
+  });
+  return available;
+}
+
+async function checkForUpdate() {
+  try {
+    const res = await fetch(SITE + "version.json", { cache: "no-store" });
+    const { version } = await res.json();
+    await chrome.storage.local.set({ latest: version, checkedAt: Date.now() });
+  } catch (err) {
+    console.warn("Float Video update check:", err);
+  }
+  return showUpdateState();
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: "get-update", title: "Download update", contexts: ["action"], visible: false });
+    chrome.contextMenus.create({ id: "check-update", title: "Check for updates", contexts: ["action"] });
+    checkForUpdate();
+  });
+  chrome.alarms.create("update-check", { periodInMinutes: 24 * 60 });
+});
+chrome.runtime.onStartup.addListener(checkForUpdate);
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "update-check") checkForUpdate();
+});
+
+chrome.contextMenus.onClicked.addListener(async (info) => {
+  if (info.menuItemId === "get-update") {
+    chrome.tabs.create({ url: SITE });
+  } else if (info.menuItemId === "check-update") {
+    if (await checkForUpdate()) {
+      chrome.tabs.create({ url: SITE });
+    } else {
+      // Brief tick on the icon so a manual check doesn't look like it did nothing.
+      await chrome.action.setBadgeBackgroundColor({ color: "#2e9e5b" });
+      await chrome.action.setBadgeText({ text: "✓" });
+      setTimeout(showUpdateState, 2500);
+    }
+  }
+});
+
 // Runs inside the page.
 async function toggleFloatingVideo() {
   const dpip = window.documentPictureInPicture;
