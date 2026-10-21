@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Float Video",
+  "version": "1.0.0",
+  "description": "Pop the video on the current tab (Netflix included) into an always-on-top floating window.",
+  "permissions": ["activeTab", "scripting"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Float video (Alt+P)",
+    "default_icon": { "16": "icons/16.png", "32": "icons/32.png" }
+  },
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+P" },
+      "description": "Toggle floating video"
+    }
+  }
+}
